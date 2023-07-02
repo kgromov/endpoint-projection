@@ -1,20 +1,22 @@
 package com.kgromov.core;
 
 import com.fasterxml.jackson.annotation.JsonView;
-import com.kgromov.mappers.MapperScaner;
-import jakarta.annotation.PostConstruct;
+//import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.tuple.Pair;
 import org.reflections.Reflections;
 import org.reflections.scanners.Scanners;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StopWatch;
 
+import javax.annotation.PostConstruct;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
-import java.util.*;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -25,10 +27,9 @@ import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
 
 @Slf4j
-@Component
+//@Component
 public class JsonViewScanner {
     private final Map<String, Set<String>> methodToFieldsProjection = new ConcurrentHashMap<>();
-    @Autowired private List<MapperScaner> mapperScaners = new ArrayList<>();
 
     @PostConstruct
     private void init() {
@@ -36,6 +37,7 @@ public class JsonViewScanner {
         stopWatch.start("JsonViewPostProcessor");
         Package[] packages = Thread.currentThread().getContextClassLoader().getDefinedPackages();
         String basePackage = Stream.of(packages).map(Package::getName).sorted(String::compareToIgnoreCase).collect(toList()).get(0);
+        log.info("Base package = {}", basePackage);
         Reflections reflections = new Reflections(basePackage,
                 Scanners.TypesAnnotated,
                 Scanners.SubTypes,
@@ -46,32 +48,32 @@ public class JsonViewScanner {
         methods.stream()
                 .filter(method -> !method.getReturnType().equals(Void.class))
                 .forEach(method -> {
-            Class<?> returnType = method.getReturnType();
-            if (returnType.isArray()) {
-                returnType = returnType.getComponentType();
-            } else if (Collection.class.isAssignableFrom(returnType)) {
-                returnType = (Class<?>) ((ParameterizedType) method.getGenericReturnType()).getActualTypeArguments()[0];
-            }
-            JsonView targetView = method.getAnnotation(JsonView.class);
-            Set<Class<?>> targetViewClasses = Set.of(targetView.value());
+                    Class<?> returnType = method.getReturnType();
+                    if (returnType.isArray()) {
+                        returnType = returnType.getComponentType();
+                    } else if (Collection.class.isAssignableFrom(returnType)) {
+                        returnType = (Class<?>) ((ParameterizedType) method.getGenericReturnType()).getActualTypeArguments()[0];
+                    }
+                    JsonView targetView = method.getAnnotation(JsonView.class);
+                    Set<Class<?>> targetViewClasses = Set.of(targetView.value());
 
-            Set<Class<?>> returnTypeViewClasses = this.resolveViewClassesForType(returnType);
-            // as 1st step only declared fields; later on - add recursive bypass
-            Map<String, Set<Class<?>>> fieldViewClasses = this.getAllFields(returnType)
-                    .stream()
-                    .map(field -> Pair.of(field.getName(), this.resolveViewClassesFromField(field)))
-                    .map(fieldViews -> Pair.of(fieldViews.getKey(), fieldViews.getValue().isEmpty() ? returnTypeViewClasses : fieldViews.getValue()))
-                    .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
-            Set<String> fieldNamesToReturn = fieldViewClasses.entrySet()
-                    .stream()
-                    .filter(entry -> entry.getValue().stream().anyMatch(targetViewClasses::contains))
-                    .map(Map.Entry::getKey)
-                    .collect(toSet());
-            String methodKey = method.getDeclaringClass().getName() + '.' + method.getName();
-            this.methodToFieldsProjection.put(methodKey, fieldNamesToReturn);
-            log.debug("Class = {}, method = {}: collected fields for projection = {}",
-                    method.getClass(), method.getName(), fieldNamesToReturn);
-        });
+                    Set<Class<?>> returnTypeViewClasses = this.resolveViewClassesForType(returnType);
+                    // as 1st step only declared fields; later on - add recursive bypass
+                    Map<String, Set<Class<?>>> fieldViewClasses = this.getAllFields(returnType)
+                            .stream()
+                            .map(field -> Pair.of(field.getName(), this.resolveViewClassesFromField(field)))
+                            .map(fieldViews -> Pair.of(fieldViews.getKey(), fieldViews.getValue().isEmpty() ? returnTypeViewClasses : fieldViews.getValue()))
+                            .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+                    Set<String> fieldNamesToReturn = fieldViewClasses.entrySet()
+                            .stream()
+                            .filter(entry -> entry.getValue().stream().anyMatch(targetViewClasses::contains))
+                            .map(Map.Entry::getKey)
+                            .collect(toSet());
+                    String methodKey = method.getDeclaringClass().getName() + '.' + method.getName();
+                    this.methodToFieldsProjection.put(methodKey, fieldNamesToReturn);
+                    log.debug("Class = {}, method = {}: collected fields for projection = {}",
+                            method.getClass(), method.getName(), fieldNamesToReturn);
+                });
         stopWatch.stop();
         log.info("Processing JsonView methods took = {} ms", stopWatch.getLastTaskTimeMillis());
     }

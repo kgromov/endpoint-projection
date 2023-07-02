@@ -1,7 +1,7 @@
 package com.kgromov.mappers;
 
 @FunctionalInterface
-public interface MapperScaner {
+public interface MapperScanner {
     // TODO: rename/define mapping settings as return type
-    MappingSettings scan();
+    MappingSettings scan(String basePackage);
 }

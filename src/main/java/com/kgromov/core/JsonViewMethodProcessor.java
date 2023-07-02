@@ -1,5 +1,6 @@
 package com.kgromov.core;
 
+import com.kgromov.mappers.MapperScanner;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -7,6 +8,7 @@ import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Pointcut;
 import org.aspectj.lang.reflect.MethodSignature;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cglib.proxy.Enhancer;
 import org.springframework.cglib.proxy.MethodInterceptor;
 import org.springframework.stereotype.Component;
@@ -15,17 +17,19 @@ import org.springframework.util.StopWatch;
 import java.beans.BeanInfo;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.*;
 
 import static java.util.stream.Collectors.toSet;
 
-@Component
+//@Component
 @Aspect
 @Slf4j
 @RequiredArgsConstructor
-public class MapperWithProjectionAspect {
+public class JsonViewMethodProcessor {
     private final JsonViewScanner jsonViewScanner;
+    private final List<MapperScanner> mapperScanners;
 
     @Pointcut("within(com.kgromov.core.Mapper+)")
     public void mapperMethods() {
@@ -43,7 +47,6 @@ public class MapperWithProjectionAspect {
         StopWatch stopWatch = new StopWatch();
         stopWatch.start("jsonFieldsFiltering");
         List<StackTraceElement> stackTrace = List.of(Thread.currentThread().getStackTrace());
-        analyzeType(joinPoint.getThis().getClass());
         Map<String, Set<String>> methodToFieldsProjection = jsonViewScanner.getMethodToFieldsProjection();
         Set<String> fieldsProjection = stackTrace.stream()
                 .filter(trace -> methodToFieldsProjection.containsKey(trace.getClassName() + '.' + trace.getMethodName()))
